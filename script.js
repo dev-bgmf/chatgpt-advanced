@@ -1,13 +1,16 @@
-let isWebAccessOn = true;
+let isWebAccessOn = false;
 let isProcessing = false;
 var numWebResults = 1;
 var timePeriod = "";
 var region = "";
-var textarea;
+var textarea; // 대화를 위해 입력된 텍스트 저장
+var listHistory = []    //  저장된 dialog 목록
 
 chrome.storage.sync.get(["num_web_results", "web_access", "region"], (data) => {
     numWebResults = data.num_web_results;
     isWebAccessOn = data.web_access;
+    listHistory = JSON.parse(localStorage.getItem("chatgpt_history_list")); 
+
     region = data.region || "wt-wt";
 });
 
@@ -63,12 +66,14 @@ function onSubmit(event) {
                 return;
             }
 
-            api_search(query, numWebResults, timePeriod, region)
-              .then(results => {
-                pasteWebResultsToTextArea(results, query);
-                pressEnter();
-                isProcessing = false;
-              });
+            pressEnter();
+            isProcessing = false;
+            // api_search(query, numWebResults, timePeriod, region)
+            //   .then(results => {
+            //     pasteWebResultsToTextArea(results, query);
+            //     pressEnter();
+            //     isProcessing = false;
+            //   });
         } catch (error) {
             isProcessing = false;
             showErrorMessage(error);
@@ -82,132 +87,110 @@ function updateTitleAndDescription() {
         return;
     }
 
-    h1_title.textContent = "WebChatGPT";
+    h1_title.textContent = "WebChatGPT Ex";
 
     const div = document.createElement("div");
     div.classList.add("w-full", "bg-gray-50", "dark:bg-white/5", "p-6", "rounded-md", "mb-10", "border");
-    div.textContent = "With WebChatGPT you can augment your prompts with relevant web search results for better and up-to-date answers.";
+    div.textContent = "With WebChatGPTEx you can augment your prompts with relevant web search results for better and up-to-date answers.";
     h1_title.parentNode.insertBefore(div, h1_title.nextSibling);
 
+    //  add dialog for loading
+    if (document.querySelector("#load_dialog")) {
+        console.log("already existed load dialog ")
+        return;    //  이미 세팅되어 있다면 exit
+    }
+    var dialog = document.createElement("load_dialog");
+    dialog.setAttribute("id", "load_dialog")
+    dialog.classList.add("hidden")
+    dialog.textContent = "List of Session"
+    var button = document.createElement("button")
+    button.textContent = "close"
+    dialog.appendChild(button);
+    button.addEventListener("click" , () => {
+        dialog.close();
+    })
+    document.body.appendChild(dialog);
+    console.log(" ADD Dialog!!")
 }
 
 function updateUI() {
-
     if (document.querySelector(".web-chatgpt-toolbar")) {
-        return;
+        return;    //  이미 세팅되어 있다면 exit
     }
 
     textarea = document.querySelector("textarea");
-    if (!textarea) {
+    if (!textarea) {    //  입력 컴포넌트가 로딩 되었는지 확인
         return;
     }
+
+    //  textarea 가 있는 상위 객체를 확인
     var textareaWrapper = textarea.parentNode;
-
+    //  최종 입력 버튼 객체 확인
     var btnSubmit = textareaWrapper.querySelector("button");
-
+    //  key down 이벤트 hook
     textarea.addEventListener("keydown", onSubmit);
-
+    //  최종 입력 버튼 클릭 이벤트 hook
     btnSubmit.addEventListener("click", onSubmit);
-
-
+    //  UI추가를 위한 div 추가, style 설정
     var toolbarDiv = document.createElement("div");
     toolbarDiv.classList.add("web-chatgpt-toolbar", "flex", "items-baseline", "gap-3", "mt-0");
     toolbarDiv.style.padding = "0em 0.5em";
 
+    // save button 
+    var ctrlDiv = document.createElement("div");
+    ctrlDiv.innerHTML = 
+    '<div class="inline-flex justify-items-center">\
+    <button id="save_button" class="btn flex justify-center gap-2 btn-neutral border-0 md:border">Save</button> \
+    <button id="load_button" class="btn flex justify-center gap-2 mx-2 btn-neutral border-0 md:border">Load</button>\
+    </div>';
+    var loadBtn = ctrlDiv.querySelector("#load_button");
+    loadBtn.addEventListener("click", () => {
+        console.log(listHistory)
+        //  combobox for selecting one from listHistory
+        var dialog = document.querySelector("#load_dialog");
+        if(dialog){
+            console.log("show!!", dialog)
+            dialog.showModal()
+        }else{
+            console.log("no dialog")
+        }
+    });    
+    var saveBtn = ctrlDiv.querySelector("#save_button");
+    saveBtn.addEventListener("click", () => {
+        let all = document.querySelectorAll(".whitespace-pre-wrap")
+        let texts = []
+        for(let div of all){
+            texts.push(div.innerText);
+        }
+        if(texts.length < 2){
+            alert("저장할 정보가 없습니다.")
+            return;
+        }
 
-    // Web access switch
-    var toggleWebAccessDiv = document.createElement("div");
-    toggleWebAccessDiv.innerHTML = '<label class="web-chatgpt-toggle"><input class="web-chatgpt-toggle-checkbox" type="checkbox"><div class="web-chatgpt-toggle-switch"></div><span class="web-chatgpt-toggle-label">Search on the web</span></label>';
-    toggleWebAccessDiv.classList.add("web-chatgpt-toggle-web-access");
-    chrome.storage.sync.get("web_access", (data) => {
-        toggleWebAccessDiv.querySelector(".web-chatgpt-toggle-checkbox").checked = data.web_access;
+        var title = window.prompt("please enter title : ");
+        if(title){
+            //  get history list from localstorage
+            console.log("check list ", listHistory)
+            //  존재하는 이름이 있을 경우 덮어 씌울 것인지 확인
+            //  no를 선택하면 저장을 취소한다.
+
+            if(listHistory && listHistory.includes(title)){
+                var response = window.confirm('Duplicate name exists. Do you want to overwrite?')
+                if(!response)
+                    return;
+            }else{
+                if(listHistory){
+                    listHistory.push(title)
+                }else{
+                    listHistory = [title]
+                }
+                localStorage.setItem("chatgpt_history_list", JSON.stringify(listHistory));
+            }
+            //  save in localstorage
+            localStorage.setItem(title, {"timestamp": new Date().toLocaleString(), "dialog" : JSON.stringify(texts)});
+        }
     });
-
-    var checkbox = toggleWebAccessDiv.querySelector(".web-chatgpt-toggle-checkbox");
-    checkbox.addEventListener("click", () => {
-            isWebAccessOn = checkbox.checked;
-            chrome.storage.sync.set({ "web_access": checkbox.checked });
-        });
-
-
-    // Number of web results
-    var numResultsDropdown = document.createElement("select");
-    numResultsDropdown.classList.add("text-sm", "dark:text-white", "ml-0", "dark:bg-gray-800", "border-0");
-
-    for (let i = 1; i <= 10; i++) {
-        let optionElement = document.createElement("option");
-        optionElement.value = i;
-        optionElement.text = i + " result" + (i == 1 ? "" : "s");
-        numResultsDropdown.appendChild(optionElement);
-    }
-
-    chrome.storage.sync.get("num_web_results", (data) => {
-        numResultsDropdown.value = data.num_web_results;
-    });
-
-    numResultsDropdown.onchange = function () {
-        numWebResults = this.value;
-        chrome.storage.sync.set({ "num_web_results": this.value });
-    };
-
-    // Time period
-    var timePeriodLabel = document.createElement("label");
-    timePeriodLabel.innerHTML = "Results from:";
-    timePeriodLabel.classList.add("text-sm", "dark:text-white");
-
-    var timePeriodDropdown = document.createElement("select");
-    timePeriodDropdown.classList.add("text-sm", "dark:text-white", "ml-0", "dark:bg-gray-800", "border-0");
-
-    var timePeriodOptions = [
-        { value: "", label: "Any time" },
-        { value: "d", label: "Past day" },
-        { value: "w", label: "Past week" },
-        { value: "m", label: "Past month" },
-        { value: "y", label: "Past year" }
-    ];
-
-    timePeriodOptions.forEach(function (option) {
-        var optionElement = document.createElement("option");
-        optionElement.value = option.value;
-        optionElement.innerHTML = option.label;
-        optionElement.classList.add("text-sm", "dark:text-white");
-        timePeriodDropdown.appendChild(optionElement);
-    });
-
-    timePeriodDropdown.onchange = function () {
-        chrome.storage.sync.set({ "time_period": this.value });
-        timePeriod = this.value;
-    };
-
-    // Region
-    var regionDropdown = document.createElement("select");
-    regionDropdown.classList.add("text-sm", "dark:text-white", "ml-0", "dark:bg-gray-800", "border-0");
-
-    fetch(chrome.runtime.getURL('regions.json'))
-        .then(function (response) {
-        return response.json();
-        })
-        .then(function (regions) {
-        regions.forEach(function (region) {
-            var optionElement = document.createElement("option");
-            optionElement.value = region.value;
-            optionElement.innerHTML = region.label;
-            optionElement.classList.add("text-sm", "dark:text-white");
-            regionDropdown.appendChild(optionElement);
-        });
-
-        regionDropdown.value = region;
-        });
-
-    regionDropdown.onchange = function () {
-        chrome.storage.sync.set({ "region": this.value });
-        region = this.value;
-    };
-
-    toolbarDiv.appendChild(toggleWebAccessDiv);
-    toolbarDiv.appendChild(numResultsDropdown);
-    toolbarDiv.appendChild(timePeriodDropdown);
-    toolbarDiv.appendChild(regionDropdown);
+    toolbarDiv.appendChild(ctrlDiv);
 
     textareaWrapper.parentNode.insertBefore(toolbarDiv, textareaWrapper.nextSibling);
 
