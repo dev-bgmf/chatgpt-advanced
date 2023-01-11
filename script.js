@@ -93,27 +93,15 @@ function updateTitleAndDescription() {
     div.classList.add("w-full", "bg-gray-50", "dark:bg-white/5", "p-6", "rounded-md", "mb-10", "border");
     div.textContent = "With WebChatGPTEx you can augment your prompts with relevant web search results for better and up-to-date answers.";
     h1_title.parentNode.insertBefore(div, h1_title.nextSibling);
-
-    //  add dialog for loading
-    if (document.querySelector("#load_dialog")) {
-        console.log("already existed load dialog ")
-        return;    //  이미 세팅되어 있다면 exit
-    }
-    var dialog = document.createElement("load_dialog");
-    dialog.setAttribute("id", "load_dialog")
-    dialog.classList.add("hidden")
-    dialog.textContent = "List of Session"
-    var button = document.createElement("button")
-    button.textContent = "close"
-    dialog.appendChild(button);
-    button.addEventListener("click" , () => {
-        dialog.close();
-    })
-    document.body.appendChild(dialog);
-    console.log(" ADD Dialog!!")
 }
 
-function updateUI() {
+
+async function fetchHtmlAsText(url){
+    const response = await fetch(url);
+    return await response.text();
+}
+
+async function updateUI() {
     if (document.querySelector(".web-chatgpt-toolbar")) {
         return;    //  이미 세팅되어 있다면 exit
     }
@@ -133,28 +121,49 @@ function updateUI() {
     btnSubmit.addEventListener("click", onSubmit);
     //  UI추가를 위한 div 추가, style 설정
     var toolbarDiv = document.createElement("div");
-    toolbarDiv.classList.add("web-chatgpt-toolbar", "flex", "items-baseline", "gap-3", "mt-0");
+    toolbarDiv.classList.add("web-chatgpt-toolbar", "justify-center");
     toolbarDiv.style.padding = "0em 0.5em";
 
-    // save button 
+    //  add save/load button
     var ctrlDiv = document.createElement("div");
     ctrlDiv.innerHTML = 
-    '<div class="inline-flex justify-items-center">\
-    <button id="save_button" class="btn flex justify-center gap-2 btn-neutral border-0 md:border">Save</button> \
-    <button id="load_button" class="btn flex justify-center gap-2 mx-2 btn-neutral border-0 md:border">Load</button>\
+    '<div id="load_dialog" class="hidden load_dialog flex"></div> \
+    <div class="inline-flex button-center-inline">\
+    <button id="save_button" class="btn flex gap-2 btn-neutral border-0 md:border">Save</button> \
+    <button id="load_button" class="btn flex gap-2 mx-2 btn-neutral border-0 md:border">Load</button>\
+    <button id="share_button" class="btn flex gap-2 mx-2 btn-neutral border-0 md:border">Share</button>\
     </div>';
+
+    var load_dlg = ctrlDiv.querySelector("#load_dialog");
+    load_dlg.innerHTML = await ( await fetch("pages/load_dialog.html")).text();
+    
+    // load button 
     var loadBtn = ctrlDiv.querySelector("#load_button");
     loadBtn.addEventListener("click", () => {
-        console.log(listHistory)
         //  combobox for selecting one from listHistory
-        var dialog = document.querySelector("#load_dialog");
-        if(dialog){
-            console.log("show!!", dialog)
-            dialog.showModal()
-        }else{
-            console.log("no dialog")
-        }
+        load_dlg.classList.remove("hidden");
+
+        //  이거 안되네. chrome.dialogs 가 undefined 라고 함.
+        // var dlg_options = {
+        //     type: 'prompt',
+        //     title: 'select a title to load',
+        //     default: listHistory[0],
+        //     choices: listHistory
+        // };
+        // chrome.dialogs.create(dlg_options, (res) => {
+        //     if(res != null){
+        //         var selected = res.response;
+        //         console.log("selected : ", selected);
+        //     }
+        // })
+        // if(dialog){
+        //     console.log("show!!", dialog)
+        // }else{
+        //     console.log("no dialog")
+        // }
     });    
+
+    // save button 
     var saveBtn = ctrlDiv.querySelector("#save_button");
     saveBtn.addEventListener("click", () => {
         let all = document.querySelectorAll(".whitespace-pre-wrap")
@@ -202,8 +211,8 @@ function updateUI() {
 
     var footerDiv = document.createElement("div");
 
-    var extension_version = chrome.runtime.getManifest().version;
-    footerDiv.innerHTML = "<a href='https://github.com/qunash/chatgpt-advanced' target='_blank' class='underline'>WebChatGPT extension v." + extension_version + "</a>. If you like the extension, please consider <a href='https://www.buymeacoffee.com/anzorq' target='_blank' class='underline'>supporting me</a>.";
+    // var extension_version = chrome.runtime.getManifest().version;
+    // footerDiv.innerHTML = "<a href='https://github.com/qunash/chatgpt-advanced' target='_blank' class='underline'>WebChatGPT extension v." + extension_version + "</a>. If you like the extension, please consider <a href='https://www.buymeacoffee.com/anzorq' target='_blank' class='underline'>supporting me</a>.";
 
     var lastElement = bottomDiv.lastElementChild;
     lastElement.appendChild(footerDiv);
